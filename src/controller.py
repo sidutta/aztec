@@ -6,7 +6,7 @@ from pymongo import MongoClient
 debug = True
 
 client = MongoClient()
-client = MongoClient('192.168.0.108', 27017)
+client = MongoClient('localhost', 27017)
 
 db = client.aztecdb
 collection = db.users
@@ -28,6 +28,7 @@ else:
     username = "tu1"
     password = "a"
 
+user_count = 0
 user_count = collection.find({"username":username,"password":password}).count()
 
 if user_count==0:
@@ -44,12 +45,23 @@ def list_containers_admin():
     for container in containers:
         print container
 
-def list_containers_user():
-    print "xyz"
+
+##################
+def list_containers_users():
+    collection = db.containers
+    containers = collection.find({"username":username})
+    for container in containers:
+        print container['container_name'], container_status(container['container_name'])
 
 def help():
     print "exit: exit from your VM"
     print "containers: list all your containers"
+    print "create: create an image instance"
+    print "erase: deletes the instance, can't be retrieved later"
+    print "start [instance_name]: starts an instance already created"
+    print "stop [instance_name]: stops a running instance"
+    print "status [instance_name]: check the status of an instance"
+    print "enter [instance_name]: ssh into an instance"
 
 def create():
     print "Type options to find out various apps that you can create"
@@ -103,19 +115,98 @@ def erase():
         collection.delete_one({"username":username,"container_name":container_name})
     print "Successfully removed:", container_name
 
+def start_container(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    if(container_status(container_name)=="Running"):
+        print container_name,"is already running!"
+        return
+    container_id = container[0]['container_id']
+    response = cli.start(container=container_id)
+    print container_name,"started successfully!"
+
+
+def stop_container(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    if(container_status(container_name)!="Running"):
+        print container_name,"is not running!"
+        return
+    container_id = container[0]['container_id']
+    response = cli.stop(container=container_id)
+    print container_name,"stopped successfully!"
+
+
+def container_status(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        return "No instance "+container_name+" exists!"
+    container_id = container[0]['container_id']
+    status = cli.inspect_container(container_id)['State']
+    if status['Running'] is True: return "Running"
+    else: return "Not running"
+
+def enter_container(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        return "No instance "+container_name+" exists!"
+    container_id = container[0]['container_id']
+    status = cli.inspect_container(container_id)['State']
+    if status['Running'] is False: 
+        return container_name + " not running. Start it first."
+    else:
+        processId = cli.inspect_container(container_id)['State']['Pid']
+        #cli.exec_create(container=container_id, tty=True, cmd="bash")
+        os.system("docker exec -it " + container_id + " bash")
+        return ""
+
 def main():
     while True:
         command = raw_input("guest@aztec:$ ")
-        if command == "exit" or command == "logout":
+        if command.strip() == "":
+            continue
+        elif command == "exit" or command == "logout":
             exit()
         elif command == "help":
             help()
         elif command == "containers":
-            list_containers_admin()
+            list_containers_users()
         elif command == "erase":
             erase()
         elif command == "create":
             create()
+        elif command.split(" ")[0] == "start":
+            if len(command.split(" "))<2:
+                print("Usage: start [instance_name]")
+                continue
+            start_container(command.split(" ")[1])
+        elif command.split(" ")[0] == "enter":
+            if len(command.split(" "))<2:
+                print("Usage: enter [instance_name]")
+                continue
+            print enter_container(command.split(" ")[1])
+        elif command.split(" ")[0] == "stop":
+            if len(command.split(" "))<2:
+                print("Usage: stop [instance_name]")
+                continue
+            stop_container(command.split(" ")[1])
+        elif command.split(" ")[0] == "status":
+            if len(command.split(" "))<2:
+                print("Usage: status [instance_name]")
+                continue
+            print container_status(command.split(" ")[1])
         else:
             print command + " is not valid. Type help for options."
 
