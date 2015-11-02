@@ -79,7 +79,7 @@ def create():
             container_already_present = collection.find({"username":username,"container_name":container_name}).count()
             if container_already_present == 1: print "Name already present. Try again!"
             else: break
-        container = cli.create_container(image='tomcat:latest')
+        container = cli.create_container(image='tomcat:aztec')
         print container['Id']
         container_id = container['Id']
         collection.insert({"username":username,"container_name":container_name,"container_id":container_id})
@@ -93,7 +93,7 @@ def create():
             container_already_present = collection.find({"username":username,"container_name":container_name}).count()
             if container_already_present == 1: print "Name already present. Try again!"
             else: break
-        container = cli.create_container(image='postgres:latest')
+        container = cli.create_container(image='postgres:aztec')
         print container['Id']
         container_id = container['Id']
         collection.insert({"username":username,"container_name":container_name,"container_id":container_id})
@@ -168,7 +168,6 @@ def enter_container(container_name):
         return container_name + " not running. Start it first."
     else:
         processId = cli.inspect_container(container_id)['State']['Pid']
-        #cli.exec_create(container=container_id, tty=True, cmd="bash")
         os.system("docker exec -it " + container_id + " bash")
         return ""
 
