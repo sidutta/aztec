@@ -2,6 +2,7 @@ import signal, os
 from docker import Client
 import pymongo
 from pymongo import MongoClient
+from prettytable import PrettyTable
 
 debug = True
 # defining privelege levels
@@ -52,9 +53,10 @@ def list_containers_admin():
 def list_containers_users():
     collection = db.containers
     containers = collection.find({"username":username})
-    print "Container Name        Status        Image        Resource Allocation"
+    table = PrettyTable(['Container Name','Status','Image','Resource Allocation'])
     for container in containers:
-        print container['container_name'], "		" , container_status(container['container_name']), "        ", container['source_image'], "        ", container['privelege_level']
+        table.add_row([container['container_name'], container_status(container['container_name']), container['source_image'], container['privelege_level']])
+    print table
 
 def help():
     print "exit: exit the session"
