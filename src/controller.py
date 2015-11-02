@@ -31,6 +31,8 @@ else:
     username = "tu1"
     password = "a"
 
+freeport = 20002
+
 user_count = 0
 user_count = collection.find({"username":username,"password":password}).count()
 
@@ -91,11 +93,21 @@ def create():
                 print "Wrong input!"
                 continue
             break
-        image_name = command + ":aztec"
-        host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'])
-        container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config)
+        image_name = command + ":git1"
+        portlist = []
+        portmap = {}
+        ssh_port = -1
+        global freeport
+        if command == "tomcat":
+            portlist.append(22)
+            portmap[22] = freeport
+            ssh_port = freeport
+        host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'], port_bindings=portmap)
+        container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config,ports=portlist)
         container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level})
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":"192.168.0.106"})
+        if command == "tomcat":
+            freeport = freeport + 1
         print "Successfully created",command,"instance:", container_name
     else:
         print "Wrong Input!"
@@ -127,8 +139,47 @@ def start_container(container_name):
         return
     container_id = container[0]['container_id']
     response = cli.start(container=container_id)
+    cli.exec_create(container=container_id,cmd="bash service ssh start")
     print container_name,"started successfully!"
 
+def add_key(container_name, key1, key2, key3):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    was_running = True
+    if(container_status(container_name)!="Running"):
+        print container_name,"is not running, attempting to start it!"
+        was_running = False
+        start_container(container_name)
+    container_id = container[0]['container_id']
+    print "container id is", container_id
+    executor = cli.exec_create(container=container_id,cmd="/bin/bash add-key "+key1+" "+key2+" "+key3)
+    response = cli.exec_start(executor.get('Id'))
+    print response
+    print "restarting ssh on container"
+    executor = cli.exec_create(container=container_id,cmd="/bin/bash service ssh restart")
+    response = cli.exec_start(executor.get('Id'))
+    print response
+    executor = cli.exec_create(container=container_id,cmd="/bin/bash service ssh start")
+    response = cli.exec_start(executor.get('Id'))
+    print response
+    print "Key added successfully!"
+    if not was_running:
+        stop_container(container_name)
+    
+
+
+def get_ssh_link(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    print "root@"+container[0]['host_ip']+":"+str(container[0]['ssh_port'])
 
 def stop_container(container_name):
     collection = db.containers
@@ -187,6 +238,16 @@ def main():
                 print("Usage: erase [instance_name]")
                 continue
             erase(command.split(" ")[1])
+        elif command.split(" ")[0] == "get-ssh-link":
+            if len(command.split(" "))<2:
+                print("Usage: get-ssh-link [instance_name]")
+                continue
+            get_ssh_link(command.split(" ")[1])
+        elif command.split(" ")[0] == "add-key":
+            if len(command.split(" "))<3:
+                print("Usage: add-key [container] [key]")
+                continue
+            add_key(command.split(" ")[1],command.split(" ")[2],command.split(" ")[3],command.split(" ")[4])
         elif command == "create":
             create()
         elif command.split(" ")[0] == "start":
