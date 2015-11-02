@@ -36,7 +36,7 @@ if user_count==0:
     exit()
 
 print "Logged in as", username
-cli = Client(base_url='unix://var/run/docker.sock')
+cli = Client(base_url='192.168.0.108:2375')
 
 
 # for internal use
@@ -51,13 +51,13 @@ def list_containers_users():
     collection = db.containers
     containers = collection.find({"username":username})
     for container in containers:
-        print container['container_name'], container_status(container['container_name'])
+        print container['container_name'], "		" , container_status(container['container_name']), "        ", container['source_image']
 
 def help():
-    print "exit: exit from your VM"
+    print "exit: exit the session"
     print "containers: list all your containers"
     print "create: create an image instance"
-    print "erase: deletes the instance, can't be retrieved later"
+    print "erase [instance_name]: deletes the instance, can't be retrieved later"
     print "start [instance_name]: starts an instance already created"
     print "stop [instance_name]: stops a running instance"
     print "status [instance_name]: check the status of an instance"
@@ -70,45 +70,31 @@ def create():
     if command == "options":
         print "tomcat: "
         print "postgres: "
-    elif command == "tomcat":
+    elif command == "tomcat" or command == "postgres":
         while True:
-            container_name = raw_input("Name the tomcat instance: ")
+            container_name = raw_input("Name the "+ command +" instance: ")
             if container_name == "":
                 print "No name specified, ignoring command create"
                 return
             container_already_present = collection.find({"username":username,"container_name":container_name}).count()
             if container_already_present == 1: print "Name already present. Try again!"
             else: break
-        container = cli.create_container(image='tomcat:aztec')
+        image_name = command + ":aztec"
+        container = cli.create_container(image=image_name)
         print container['Id']
         container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id})
-        print "Successfully created tomcat instance:", container_name
-    elif command == "postgres":
-        while True:
-            container_name = raw_input("Name the postgres instance: ")
-            if container_name == "":
-                print "No name specified, ignoring command create"
-                return
-            container_already_present = collection.find({"username":username,"container_name":container_name}).count()
-            if container_already_present == 1: print "Name already present. Try again!"
-            else: break
-        container = cli.create_container(image='postgres:aztec')
-        print container['Id']
-        container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id})
-        print "Successfully created postgres instance:", container_name
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command})
+        print "Successfully created",command,"instance:", container_name
 
-def erase():
+def erase(container_name):
     collection = db.containers
-    container_name = raw_input("Enter the name of the instance to be removed: ")
-    if container_name == "":
-        print "No name specified, ignoring command create"
-        return
     container = collection.find({"username":username,"container_name":container_name})
     container_already_present = container.count()
     if container_already_present == 0:
         print "No instance",container_name,"exists!"
+        return
+    elif(container_status(container_name)=="Running"):
+        print "Stop",container_name,"first!"
         return
     else:
         cli.remove_container(container[0]['container_id'])
@@ -173,8 +159,8 @@ def enter_container(container_name):
 
 def main():
     while True:
-        command = raw_input("guest@aztec:$ ")
-        if command.strip() == "":
+        command = raw_input("guest@aztec:$ ").strip()
+        if command == "":
             continue
         elif command == "exit" or command == "logout":
             exit()
@@ -182,8 +168,11 @@ def main():
             help()
         elif command == "containers":
             list_containers_users()
-        elif command == "erase":
-            erase()
+        elif command.split(" ")[0] == "erase":
+            if len(command.split(" "))<2:
+                print("Usage: erase [instance_name]")
+                continue
+            erase(command.split(" ")[1])
         elif command == "create":
             create()
         elif command.split(" ")[0] == "start":
