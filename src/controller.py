@@ -5,10 +5,10 @@ from pymongo import MongoClient
 
 debug = True
 # defining privelege levels
-resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '20m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '5m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '1m'}}
+resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '600m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '400m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '200m'}}
 
 client = MongoClient()
-client = MongoClient('localhost', 27017)
+client = MongoClient('192.168.0.106', 27017)
 
 db = client.aztecdb
 collection = db.users
@@ -38,7 +38,7 @@ if user_count==0:
     exit()
 
 print "Logged in as", username
-cli = Client(base_url='192.168.0.108:2375')
+cli = Client(base_url='192.168.0.106:2375')
 
 
 # for internal use
@@ -52,8 +52,9 @@ def list_containers_admin():
 def list_containers_users():
     collection = db.containers
     containers = collection.find({"username":username})
+    print "Container Name        Status        Image        Resource Allocation"
     for container in containers:
-        print container['container_name'], "		" , container_status(container['container_name']), "        ", container['source_image']
+        print container['container_name'], "		" , container_status(container['container_name']), "        ", container['source_image'], "        ", container['privelege_level']
 
 def help():
     print "exit: exit the session"
@@ -72,6 +73,7 @@ def create():
     if command == "options":
         print "tomcat: "
         print "postgres: "
+        create()
     elif command == "tomcat" or command == "postgres":
         while True:
             container_name = raw_input("Name the "+ command +" instance: ")
@@ -88,8 +90,8 @@ def create():
                 continue
             break
         image_name = command + ":aztec"
-        container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],mem_limit=resource_shares[privelege_level]['mem_limit'])
-        print container['Id']
+        host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'])
+        container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config)
         container_id = container['Id']
         collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level})
         print "Successfully created",command,"instance:", container_name
