@@ -120,7 +120,7 @@ def create():
         collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":"192.168.0.106"})
         if command == "tomcat":
             freeport = freeport + 1
-            config_collection.insert({"key":"freeport","value":freeport})
+            config_collection.update_one({"key":"freeport"},{"$set":{"value":freeport}})
         print "Successfully created",command,"instance:", container_name
     else:
         print "Wrong Input!"
