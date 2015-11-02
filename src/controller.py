@@ -4,6 +4,8 @@ import pymongo
 from pymongo import MongoClient
 
 debug = True
+# defining privelege levels
+resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '20m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '5m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '1m'}}
 
 client = MongoClient()
 client = MongoClient('localhost', 27017)
@@ -65,7 +67,7 @@ def help():
 
 def create():
     print "Type options to find out various apps that you can create"
-    command = raw_input("Enter your choice: ")
+    command = raw_input("Enter your choice: ").strip()
     collection = db.containers
     if command == "options":
         print "tomcat: "
@@ -79,12 +81,20 @@ def create():
             container_already_present = collection.find({"username":username,"container_name":container_name}).count()
             if container_already_present == 1: print "Name already present. Try again!"
             else: break
+        while True:
+            privelege_level = raw_input("Please assign the level of resources to be allocated (high/medium/low): ").strip()
+            if privelege_level not in ["high", "medium", "low"]:
+                print "Wrong input!"
+                continue
+            break
         image_name = command + ":aztec"
-        container = cli.create_container(image=image_name)
+        container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],mem_limit=resource_shares[privelege_level]['mem_limit'])
         print container['Id']
         container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command})
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level})
         print "Successfully created",command,"instance:", container_name
+    else:
+        print "Wrong Input!"
 
 def erase(container_name):
     collection = db.containers
