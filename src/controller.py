@@ -153,6 +153,7 @@ def start_container(container_name):
     container_id = container[0]['container_id']
     response = cli.start(container=container_id)
     cli.exec_create(container=container_id,cmd="bash service ssh start")
+    response = cli.exec_start(executor.get('Id'))
     print container_name,"started successfully!"
 
 def add_key(container_name, key1, key2, key3):
@@ -171,14 +172,11 @@ def add_key(container_name, key1, key2, key3):
     print "container id is", container_id
     executor = cli.exec_create(container=container_id,cmd="/bin/bash add-key "+key1+" "+key2+" "+key3)
     response = cli.exec_start(executor.get('Id'))
-    print response
     print "restarting ssh on container"
     executor = cli.exec_create(container=container_id,cmd="/bin/bash service ssh restart")
     response = cli.exec_start(executor.get('Id'))
-    print response
     executor = cli.exec_create(container=container_id,cmd="/bin/bash service ssh start")
     response = cli.exec_start(executor.get('Id'))
-    print response
     print "Key added successfully!"
     if not was_running:
         stop_container(container_name)
@@ -194,6 +192,17 @@ def get_ssh_link(container_name):
         return
     print "root@"+container[0]['host_ip']+":"+str(container[0]['ssh_port'])
 
+
+def get_git_clone_link(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    print "git clone ssh://root@"+container[0]['host_ip']+":"+str(container[0]['ssh_port'])+"/usr/local/tomcat-repo ." 
+    print "Do not forget to execute update-repo to update your working directory!"
+
 def stop_container(container_name):
     collection = db.containers
     container = collection.find({"username":username,"container_name":container_name})
@@ -208,6 +217,19 @@ def stop_container(container_name):
     response = cli.stop(container=container_id)
     print container_name,"stopped successfully!"
 
+
+def update_repo(container_name):
+    collection = db.containers
+    container = collection.find({"username":username,"container_name":container_name})
+    container_already_present = container.count()
+    if container_already_present == 0:
+        print "No instance",container_name,"exists!"
+        return
+    container_id = container[0]['container_id']    
+    executor = cli.exec_create(container=container_id,cmd="bash -c \'cd /usr/local/tomcat ;  git pull\'")
+    response = cli.exec_start(executor.get('Id'))
+    print response
+        
 
 def container_status(container_name):
     collection = db.containers
@@ -256,6 +278,11 @@ def main():
                 print("Usage: get-ssh-link [instance_name]")
                 continue
             get_ssh_link(command.split(" ")[1])
+        elif command.split(" ")[0] == "get-git-clone-link":
+            if len(command.split(" "))<2:
+                print("Usage: get-git-clone-link [instance_name]")
+                continue
+            get_git_clone_link(command.split(" ")[1])
         elif command.split(" ")[0] == "add-key":
             if len(command.split(" "))<3:
                 print("Usage: add-key [container] [key]")
@@ -263,6 +290,11 @@ def main():
             add_key(command.split(" ")[1],command.split(" ")[2],command.split(" ")[3],command.split(" ")[4])
         elif command == "create":
             create()
+        elif command.split(" ")[0] == "update-repo":
+            if len(command.split(" "))<2:
+                print("Usage: update-repo [instance_name]")
+                continue
+            update_repo(command.split(" ")[1])
         elif command.split(" ")[0] == "start":
             if len(command.split(" "))<2:
                 print("Usage: start [instance_name]")
