@@ -31,7 +31,14 @@ else:
     username = "tu1"
     password = "a"
 
-freeport = 20002
+config_collection = db.configs
+con = config_collection.find({"key":"freeport"})
+con_already_present = con.count()
+if con_already_present == 0:
+    freeport = 20005
+    config_collection.insert({"key":"freeport","value":20005})
+else:
+    freeport = con[0]['value']
 
 user_count = 0
 user_count = collection.find({"username":username,"password":password}).count()
@@ -94,10 +101,15 @@ def create():
                 continue
             break
         image_name = command + ":git1"
+
+        
+
+
         portlist = []
         portmap = {}
         ssh_port = -1
-        global freeport
+        con = config_collection.find({"key":"freeport"})
+        freeport = con[0]['value']
         if command == "tomcat":
             portlist.append(22)
             portmap[22] = freeport
@@ -108,6 +120,7 @@ def create():
         collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":"192.168.0.106"})
         if command == "tomcat":
             freeport = freeport + 1
+            config_collection.insert({"key":"freeport","value":freeport})
         print "Successfully created",command,"instance:", container_name
     else:
         print "Wrong Input!"
