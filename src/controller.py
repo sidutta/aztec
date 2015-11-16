@@ -5,11 +5,12 @@ from pymongo import MongoClient
 from prettytable import PrettyTable
 
 debug = True
+master_ip = "192.168.0.106"
 # defining privelege levels
 resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '600m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '400m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '200m'}}
 
 client = MongoClient()
-client = MongoClient('192.168.0.106', 27017)
+client = MongoClient(master_ip, 27017)
 
 db = client.aztecdb
 collection = db.users
@@ -48,7 +49,7 @@ if user_count==0:
     exit()
 
 print "Logged in as", username
-cli = Client(base_url='192.168.0.106:2375')
+cli = Client(base_url=master_ip+":2375")
 
 
 # for internal use
@@ -101,10 +102,6 @@ def create():
                 continue
             break
         image_name = command + ":git1"
-
-        
-
-
         portlist = []
         portmap = {}
         ssh_port = -1
@@ -117,7 +114,7 @@ def create():
         host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'], port_bindings=portmap)
         container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config,ports=portlist)
         container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":"192.168.0.106"})
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":master_ip,"checkpointed":"false"})
         if command == "tomcat":
             freeport = freeport + 1
             config_collection.update_one({"key":"freeport"},{"$set":{"value":freeport}})
@@ -181,7 +178,6 @@ def add_key(container_name, key1, key2, key3):
     if not was_running:
         stop_container(container_name)
     
-
 
 def get_ssh_link(container_name):
     collection = db.containers

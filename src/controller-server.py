@@ -2,10 +2,15 @@
 import pymongo
 import time
 from pymongo import MongoClient
+from docker import Client
 import socket               # Import socket module
 from threading import Timer
 from thread import *
 import thread
+
+master_ip = "192.168.0.106"
+cli_master = Client(base_url=master_ip+":2375")    
+registry = master_ip+":5000"
 
 class RepeatedTimer(object):
     def __init__(self, interval, function, *args, **kwargs):
@@ -32,9 +37,8 @@ class RepeatedTimer(object):
         self._timer.cancel()
         self.is_running = False
 
-ip_to_socket = {}
-
-def check():
+def check_status():
+    collection = db.online_nodes
     nodes = collection.find()
     for node in nodes:
         if(time.time()-node['timestamp']>=timeout_threshold):
@@ -42,6 +46,21 @@ def check():
             print "Lost connection with", node['ip']
 	else:
 	    print "Everything is fine with",node['ip']
+
+def checkpoint():
+    collection = db.containers
+    containers = collection.find()
+    for container in containers:
+        cli = Client(base_url=container['host_ip']+":2375")
+        status = cli.inspect_container(container['container_id'])['State']
+        if status['Running'] is True:
+            if container['checkpointed'] == "true":
+                cli.remove_image(image=container['source_image']+':'+container['username']+"_"+container['container_name'])
+            else:
+                collection.update_one({"container_id":container['container_id']},{"$set":{"checkpointed":"true"}})
+            cli.commit(container=container['container_id'],repository=registry+"/"+container['source_image'],tag=container['username']+"_"+container['container_name'])
+            cli.push(repository=registry+"/"+container['source_image'], tag=container['username']+"_"+container['container_name'], stream=False)
+            print container['container_name']+"'s checkpointing is complete!"
 
 def clientthread(conn, addr):
     while True:
@@ -56,23 +75,21 @@ def clientthread(conn, addr):
 
 
 s = socket.socket()         # Create a socket object
-host = "192.168.0.106"      # Get local machine name
-port = 12345                # Reserve a port for your service.
-s.bind((host, port))        # Bind to the port
+port = 12355                # Reserve a port for your service.
+s.bind((master_ip, port))        # Bind to the port
 
 client = MongoClient()
-client = MongoClient('localhost', 27017)
+client = MongoClient(master_ip, 27017)
 db = client.aztecdb
 db.online_nodes.drop()
-collection = db.online_nodes
-
 
 s.listen(5)                 # Now wait for client connection.
 
 timeout_threshold = 20
 
-RepeatedTimer(10, check)
-
+RepeatedTimer(10, check_status)
+RepeatedTimer(300, checkpoint)
+collection = db.online_nodes
 
 while True:
     conn, addr = s.accept()     # Establish connection with client.

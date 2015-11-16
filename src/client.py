@@ -3,7 +3,7 @@
 import socket               # Import socket module
 import time
 s = socket.socket()         # Create a socket object
-host = "192.168.0.106" # Get local machine name
+host = "192.168.0.103" 		# Get local machine name
 port = 12345                # Reserve a port for your service.
 
 #ni.ifaddresses('wlan0')
