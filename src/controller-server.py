@@ -51,6 +51,9 @@ def check_status():
 	else:
 	    print "Everything is fine with",node['ip']
 
+def node_exit_handler(addr):
+    # Shift containers here
+
 def checkpoint():
     collection = db.containers
     containers = collection.find()
@@ -74,6 +77,7 @@ def clientthread(conn, addr):
             print addr,"is alive"
         else:
             print "Something somewhere went terribly wrong!", data, addr
+            node_exit_handler(addr)
             conn.close()
             thread.exit()
 
