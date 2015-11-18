@@ -7,7 +7,7 @@ import time
 config = ConfigParser.ConfigParser()
 config.read('aztec.cfg')
 host = config.get('Main_Config','master_ip_addr')
-port = config.get('Main_Config','master_controller_port')
+port = config.getint('Main_Config','master_controller_port')
 
 s = socket.socket()         # Create a socket object
 s.connect((host, port))

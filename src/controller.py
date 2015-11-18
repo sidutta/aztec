@@ -16,7 +16,7 @@ signal.signal(signal.SIGTSTP, handler)
 
 config = ConfigParser.ConfigParser()
 config.read('aztec.cfg')
-debug = config.get('Main_Config','debug')
+debug = config.getboolean('Main_Config','debug')
 master_ip = config.get('Main_Config','master_ip_addr')
 
 # defining privelege levels
