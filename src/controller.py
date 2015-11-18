@@ -3,6 +3,7 @@ from docker import Client
 import pymongo
 from pymongo import MongoClient
 from prettytable import PrettyTable
+import ConfigParser
 
 def handler(signum, frame):
     print('Signal handler called with signal', signum)
@@ -13,8 +14,11 @@ signal.signal(signal.SIGTERM, handler)
 signal.signal(signal.SIGQUIT, handler)
 signal.signal(signal.SIGTSTP, handler)
 
-debug = True
-master_ip = "192.168.0.106"
+config = ConfigParser.ConfigParser()
+config.read('aztec.cfg')
+debug = config.get('Main_Config','debug')
+master_ip = config.get('Main_Config','master_ip_addr')
+
 # defining privelege levels
 resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '600m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '400m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '200m'}}
 

@@ -1,12 +1,15 @@
 #!/usr/bin/python           # This is client.py file
 
+import ConfigParser
 import socket               # Import socket module
 import time
-s = socket.socket()         # Create a socket object
-host = "192.168.0.103" 		# Get local machine name
-port = 12345                # Reserve a port for your service.
 
-#ni.ifaddresses('wlan0')
+config = ConfigParser.ConfigParser()
+config.read('aztec.cfg')
+host = config.get('Main_Config','master_ip_addr')
+port = config.get('Main_Config','master_controller_port')
+
+s = socket.socket()         # Create a socket object
 s.connect((host, port))
 while True:
     s.send("alive")

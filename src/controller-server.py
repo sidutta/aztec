@@ -7,8 +7,12 @@ import socket               # Import socket module
 from threading import Timer
 from thread import *
 import thread
+import ConfigParser
 
-master_ip = "192.168.0.106"
+config = ConfigParser.ConfigParser()
+config.read('aztec.cfg')
+master_ip = config.get('Main_Config','master_ip_addr')
+
 cli_master = Client(base_url=master_ip+":2375")    
 registry = master_ip+":5000"
 
