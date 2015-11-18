@@ -4,6 +4,15 @@ import pymongo
 from pymongo import MongoClient
 from prettytable import PrettyTable
 
+def handler(signum, frame):
+    print('Signal handler called with signal', signum)
+    exit()
+
+signal.signal(signal.SIGINT, handler)
+signal.signal(signal.SIGTERM, handler)
+signal.signal(signal.SIGQUIT, handler)
+signal.signal(signal.SIGTSTP, handler)
+
 debug = True
 master_ip = "192.168.0.106"
 # defining privelege levels
@@ -16,15 +25,6 @@ db = client.aztecdb
 collection = db.users
 print "Yo World! Welcome to Aztec!"
 
-def handler(signum, frame):
-    print('Signal handler called with signal', signum)
-    exit()
-
-signal.signal(signal.SIGINT, handler)
-signal.signal(signal.SIGTERM, handler)
-signal.signal(signal.SIGQUIT, handler)
-signal.signal(signal.SIGTSTP, handler)
-
 if(debug is False):
     username = raw_input("Enter username: ")
     password = raw_input("Enter password: ")
@@ -33,6 +33,7 @@ else:
     password = "a"
 
 config_collection = db.configs
+host_collection = db.online_nodes
 con = config_collection.find({"key":"freeport"})
 con_already_present = con.count()
 if con_already_present == 0:
@@ -49,15 +50,19 @@ if user_count==0:
     exit()
 
 print "Logged in as", username
-cli = Client(base_url=master_ip+":2375")
 
+def docker_client(host_ip):
+    return Client(base_url=host_ip+":2375")
 
-# for internal use
-def list_containers_admin():
-    containers = cli.containers()
-    for container in containers:
-        print container
-
+def choose_least_loaded(privelege_level):
+    hosts = host_collection.find()
+    minimum_so_far = 0
+    best_host = -1
+    for host in hosts:
+        if best_host == -1 or host[privelege_level] < minimum_so_far:
+            best_host = host['ip']
+            minimum_so_far = host[privelege_level]
+    return best_host
 
 ##################
 def list_containers_users():
@@ -111,10 +116,17 @@ def create():
             portlist.append(22)
             portmap[22] = freeport
             ssh_port = freeport
+        
+        host_ip = choose_least_loaded(privelege_level)
+        cli = docker_client(host_ip)
         host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'], port_bindings=portmap)
         container = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config,ports=portlist)
+
         container_id = container['Id']
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":master_ip,"checkpointed":"false"})
+
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":host_ip,"checkpointed":"false"})
+        original_load = host_collection.find({"ip":host_ip})[0][privelege_level]
+        host_collection.update_one({"ip":host_ip},{"$set":{privelege_level:original_load+1}})
         if command == "tomcat":
             freeport = freeport + 1
             config_collection.update_one({"key":"freeport"},{"$set":{"value":freeport}})
@@ -133,8 +145,11 @@ def erase(container_name):
         print "Stop",container_name,"first!"
         return
     else:
+        cli = docker_client(container[0]['host_ip'])
         cli.remove_container(container[0]['container_id'])
         collection.delete_one({"username":username,"container_name":container_name})
+        original_load = host_collection.find({"ip":host_ip})[0][container[0]['privelege_level']]
+        host_collection.update_one({"ip":host_ip},{"$set":{privelege_level:original_load-1}})
     print "Successfully removed:", container_name
 
 def start_container(container_name):
@@ -148,6 +163,7 @@ def start_container(container_name):
         print container_name,"is already running!"
         return
     container_id = container[0]['container_id']
+    cli = docker_client(container[0]['host_ip'])
     response = cli.start(container=container_id)
     cli.exec_create(container=container_id,cmd="bash service ssh start")
     response = cli.exec_start(executor.get('Id'))
@@ -167,6 +183,7 @@ def add_key(container_name, key1, key2, key3):
         start_container(container_name)
     container_id = container[0]['container_id']
     print "container id is", container_id
+    cli = docker_client(container[0]['host_ip'])
     executor = cli.exec_create(container=container_id,cmd="/bin/bash add-key "+key1+" "+key2+" "+key3)
     response = cli.exec_start(executor.get('Id'))
     print "restarting ssh on container"
@@ -210,6 +227,7 @@ def stop_container(container_name):
         print container_name,"is not running!"
         return
     container_id = container[0]['container_id']
+    cli = docker_client(container[0]['host_ip'])
     response = cli.stop(container=container_id)
     print container_name,"stopped successfully!"
 
@@ -221,7 +239,8 @@ def update_repo(container_name):
     if container_already_present == 0:
         print "No instance",container_name,"exists!"
         return
-    container_id = container[0]['container_id']    
+    container_id = container[0]['container_id']
+    cli = docker_client(container[0]['host_ip'])
     executor = cli.exec_create(container=container_id,cmd="bash -c \'cd /usr/local/tomcat ;  git pull\'")
     response = cli.exec_start(executor.get('Id'))
     print response
@@ -234,6 +253,7 @@ def container_status(container_name):
     if container_already_present == 0:
         return "No instance "+container_name+" exists!"
     container_id = container[0]['container_id']
+    cli = docker_client(container[0]['host_ip'])
     status = cli.inspect_container(container_id)['State']
     if status['Running'] is True: return "Running"
     else: return "Not running"
@@ -241,14 +261,13 @@ def container_status(container_name):
 def enter_container(container_name):
     collection = db.containers
     container = collection.find({"username":username,"container_name":container_name})
-    container_already_present = container.count()
-    if container_already_present == 0:
-        return "No instance "+container_name+" exists!"
-    container_id = container[0]['container_id']
-    status = cli.inspect_container(container_id)['State']
-    if status['Running'] is False: 
+    status = container_status(container_name)
+    if status == "No instance "+container_name+" exists!":
+        return status
+    elif status == "Not running"
         return container_name + " not running. Start it first."
     else:
+        cli = docker_client(container[0]['host_ip'])
         processId = cli.inspect_container(container_id)['State']['Pid']
         os.system("docker exec -it " + container_id + " bash")
         return ""

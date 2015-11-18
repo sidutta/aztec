@@ -42,7 +42,7 @@ def check_status():
     nodes = collection.find()
     for node in nodes:
         if(time.time()-node['timestamp']>=timeout_threshold):
-            collection.update({"ip":node['ip']},{"ip":node['ip'],"status":"offline","timestamp":node['timestamp']})   
+            collection.update_one({"ip":node['ip']},{"$set":{"status":"offline"}})
             print "Lost connection with", node['ip']
 	else:
 	    print "Everything is fine with",node['ip']
@@ -66,7 +66,7 @@ def clientthread(conn, addr):
     while True:
         data = conn.recv(1024)
         if data=="alive":
-            collection.update({"ip":addr},{"ip":addr,"status":"online","timestamp":time.time()})   
+            collection.update_one({"ip":addr},{"$set":{"status":"online","timestamp":time.time()}})   
             print addr,"is alive"
         else:
             print "Something somewhere went terribly wrong!", data, addr
@@ -96,7 +96,7 @@ while True:
     print 'Got connection request from', addr[0]
     present = collection.find({"ip":addr[0]}).count()
     if(present<=0):	
-        collection.insert({"ip":addr[0], "status":"online", "timestamp":time.time()})
+        collection.insert({"ip":addr[0], "status":"online", "timestamp":time.time(), "high":0, "medium":0, "low":0})
     else:
-        collection.update({"ip":addr[0]},{"ip":addr[0],"status":"online","timestamp":time.time()}) 
+        collection.update_one({"ip":addr[0]},{"$set":{"status":"online","timestamp":time.time()}})
     start_new_thread(clientthread, (conn, addr[0]))
