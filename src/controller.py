@@ -63,9 +63,10 @@ def choose_least_loaded(privelege_level):
     minimum_so_far = 0
     best_host = -1
     for host in hosts:
-        if best_host == -1 or host[privelege_level] < minimum_so_far:
-            best_host = host['ip']
-            minimum_so_far = host[privelege_level]
+        if host['status'] == "online":
+            if best_host == -1 or host[privelege_level] < minimum_so_far:
+                best_host = host['ip']
+                minimum_so_far = host[privelege_level]
     return best_host
 
 ##################
@@ -131,7 +132,7 @@ def create():
 
         container_id = container['Id']
 
-        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":host_ip,"checkpointed":"false"})
+        collection.insert({"username":username,"container_name":container_name,"container_id":container_id,"source_image":command,"privelege_level":privelege_level,"ssh_port":ssh_port,"host_ip":host_ip,"checkpointed":"false","status":"Stopped"})
         original_load = host_collection.find({"ip":host_ip})[0][privelege_level]
         host_collection.update_one({"ip":host_ip},{"$set":{privelege_level:original_load+1}})
         if command == "tomcat":

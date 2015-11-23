@@ -15,6 +15,12 @@ config.read('aztec.cfg')
 master_ip = config.get('Main_Config','master_ip_addr')
 aztecport = config.getint('Main_Config','master_controller_port')
 
+client = MongoClient()
+client = MongoClient(master_ip, 27017)
+db = client.aztecdb
+db.online_nodes.drop()
+host_collection = db.online_nodes
+
 cli_master = Client(base_url=master_ip+":2375")    
 registry = master_ip+":5000"
 
@@ -43,7 +49,7 @@ class RepeatedTimer(object):
         self._timer.cancel()
         self.is_running = False
 
-def check_status():
+def check_node_status():
     collection = db.online_nodes
     nodes = collection.find()
     for node in nodes:
@@ -55,12 +61,61 @@ def check_status():
 	else:
 	    print "Everything is fine with",node['ip']
 
+def choose_least_loaded(privelege_level):
+    hosts = host_collection.find()
+    minimum_so_far = 0
+    best_host = -1
+    for host in hosts:
+        if host['status'] == "online":
+            if best_host == -1 or host[privelege_level] < minimum_so_far:
+                best_host = host['ip']
+                minimum_so_far = host[privelege_level]
+    return best_host
+
 def node_exit_handler(addr):
     collection = db.containers
     containers = collection.find()
+    resource_shares = {'high':{'cpu_shares' : 1000, 'mem_limit' : '600m'}, 'medium':{'cpu_shares' : 100, 'mem_limit' : '400m'}, 'low':{'cpu_shares' : 10, 'mem_limit' : '200m'}}
     for container in containers:
-    	if container
+    	if container['host_ip'] == addr and container['checkpointed'] == "true":
+            host_ip = choose_least_loaded(container['privelege_level'])
+            cli = Client(base_url=host_ip+":2375")
+            cli.pull(repository=registry+"/"+container['source_image'], tag=container['username']+"_"+container['container_name'], stream=False)
+            #Create
+            image_name = registry+"/"+container['source_image']+":"+container['username']+"_"+container['container_name']
+            privelege_level = container['privelege_level']
+            portlist = []
+            portmap = {}
+            if container['source_image'] == "tomcat":
+                portlist.append(22)
+                portmap[22] = container['ssh_port']
+
+            host_config = cli.create_host_config(mem_limit=resource_shares[privelege_level]['mem_limit'], port_bindings=portmap)
+            container_new = cli.create_container(image=image_name,cpu_shares=resource_shares[privelege_level]['cpu_shares'],host_config=host_config,ports=portlist)
+
+            original_load = host_collection.find({"ip":host_ip})[0][privelege_level]
+            host_collection.update_one({"ip":host_ip},{"$set":{privelege_level:original_load+1}})
+            collection.update_one({"container_id":container['container_id']},{"$set":{"host_ip":host_ip}})
+            collection.update_one({"container_id":container['container_id']},{"$set":{"container_id":container_new['Id']}})
+            #Start
+            if container['status'] == "Started":
+                container_id = container_new['Id']
+                response = cli.start(container=container_id)
+                executor = cli.exec_create(container=container_id,cmd="bash service ssh start")
+                response = cli.exec_start(executor.get('Id'))
     print "Failure handler called"
+
+def check_container_status():
+    collection = db.containers
+    containers = collection.find()
+    for container in containers:
+        if host_collection.find({"ip":container['host_ip']})[0]['status'] == "online":
+            cli = Client(base_url=container['host_ip']+":2375")
+            status = cli.inspect_container(container['container_id'])['State']
+            if status['Running'] is True:
+                collection.update_one({"container_id":container['container_id']},{"$set":{"status":"Started"}})
+            else:
+                collection.update_one({"container_id":container['container_id']},{"$set":{"status":"Stopped"}})             
 
 def checkpoint():
     collection = db.containers
@@ -94,16 +149,12 @@ s = socket.socket()         # Create a socket object
 port = aztecport                # Reserve a port for your service.
 s.bind((master_ip, port))        # Bind to the port
 
-client = MongoClient()
-client = MongoClient(master_ip, 27017)
-db = client.aztecdb
-db.online_nodes.drop()
-
 s.listen(5)                 # Now wait for client connection.
 
 timeout_threshold = 20
 
-RepeatedTimer(10, check_status)
+RepeatedTimer(10, check_node_status)
+RepeatedTimer(30, check_container_status)
 RepeatedTimer(300, checkpoint)
 collection = db.online_nodes
 
