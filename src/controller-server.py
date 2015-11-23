@@ -8,6 +8,7 @@ from threading import Timer
 from thread import *
 import thread
 import ConfigParser
+import os
 
 config = ConfigParser.ConfigParser()
 config.read('aztec.cfg')
@@ -55,7 +56,10 @@ def check_status():
 	    print "Everything is fine with",node['ip']
 
 def node_exit_handler(addr):
-    # Shift containers here
+    collection = db.containers
+    containers = collection.find()
+    for container in containers:
+    	if container
     print "Failure handler called"
 
 def checkpoint():
@@ -65,11 +69,11 @@ def checkpoint():
         cli = Client(base_url=container['host_ip']+":2375")
         status = cli.inspect_container(container['container_id'])['State']
         if status['Running'] is True:
-            if container['checkpointed'] == "true":
-                cli.remove_image(image=container['source_image']+':'+container['username']+"_"+container['container_name'])
-            else:
+            if container['checkpointed'] == "false":
                 collection.update_one({"container_id":container['container_id']},{"$set":{"checkpointed":"true"}})
-            cli.commit(container=container['container_id'],repository=registry+"/"+container['source_image'],tag=container['username']+"_"+container['container_name'])
+            #cli.commit(container=container['container_id'],repository=registry+"/"+container['source_image'],tag=container['username']+"_"+container['container_name'])
+            commit_cmd = "docker -H " + container['host_ip'] + ":2375 commit --pause=false "+container['container_id']+" "+registry+"/"+container['source_image']+":"+container['username']+"_"+container['container_name']
+            os.system(commit_cmd)
             cli.push(repository=registry+"/"+container['source_image'], tag=container['username']+"_"+container['container_name'], stream=False)
             print container['container_name']+"'s checkpointing is complete!"
 
