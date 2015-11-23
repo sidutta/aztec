@@ -113,7 +113,7 @@ def create():
                 print "Wrong input!"
                 continue
             break
-        image_name = command + ":git1"
+        image_name = command + ":aztec"
         portlist = []
         portmap = {}
         ssh_port = -1
