@@ -46,6 +46,8 @@ def check_status():
     collection = db.online_nodes
     nodes = collection.find()
     for node in nodes:
+    	if(node['ip'] == master_ip):
+    		continue
         if(time.time()-node['timestamp']>=timeout_threshold):
             collection.update_one({"ip":node['ip']},{"$set":{"status":"offline"}})
             print "Lost connection with", node['ip']
