@@ -79,7 +79,7 @@ def list_containers_users():
 
 def help():
     print "exit: exit the session"
-    print "containers: list all your containers"
+    print "servers: list all your servers"
     print "create: create an image instance"
     print "erase [instance_name]: deletes the instance, can't be retrieved later"
     print "start [instance_name]: starts an instance already created"
@@ -154,9 +154,10 @@ def erase(container_name):
     else:
         cli = docker_client(container[0]['host_ip'])
         cli.remove_container(container[0]['container_id'])
-        collection.delete_one({"username":username,"container_name":container_name})
+        privelege_level = container[0]['privelege_level']
         original_load = host_collection.find({"ip":container[0]['host_ip']})[0][container[0]['privelege_level']]
         host_collection.update_one({"ip":container[0]['host_ip']},{"$set":{privelege_level:original_load-1}})
+        collection.delete_one({"username":username,"container_name":container_name})
     print "Successfully removed:", container_name
 
 def start_container(container_name):
@@ -288,7 +289,7 @@ def main():
             exit()
         elif command == "help":
             help()
-        elif command == "containers":
+        elif command == "servers":
             list_containers_users()
         elif command.split(" ")[0] == "erase":
             if len(command.split(" "))<2:
