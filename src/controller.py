@@ -85,7 +85,10 @@ def help():
     print "start [instance_name]: starts an instance already created"
     print "stop [instance_name]: stops a running instance"
     print "status [instance_name]: check the status of an instance"
-    print "enter [instance_name]: ssh into an instance"
+    print "get-ssh-link [instance_name]: get link to ssh into an instance"
+    print "add-key [instance_name] [key]: add your public key"
+    print "update-repo [instance_name]: update your git repository after pushing into git"
+    print "get-git-clone-link [instance_name]: get link to clone your tomcat repo to your local machine"
 
 def create():
     print "Type options to find out various apps that you can create"
@@ -152,8 +155,8 @@ def erase(container_name):
         cli = docker_client(container[0]['host_ip'])
         cli.remove_container(container[0]['container_id'])
         collection.delete_one({"username":username,"container_name":container_name})
-        original_load = host_collection.find({"ip":host_ip})[0][container[0]['privelege_level']]
-        host_collection.update_one({"ip":host_ip},{"$set":{privelege_level:original_load-1}})
+        original_load = host_collection.find({"ip":container[0]['host_ip']})[0][container[0]['privelege_level']]
+        host_collection.update_one({"ip":container[0]['host_ip']},{"$set":{privelege_level:original_load-1}})
     print "Successfully removed:", container_name
 
 def start_container(container_name):
@@ -169,7 +172,7 @@ def start_container(container_name):
     container_id = container[0]['container_id']
     cli = docker_client(container[0]['host_ip'])
     response = cli.start(container=container_id)
-    cli.exec_create(container=container_id,cmd="bash service ssh start")
+    executor = cli.exec_create(container=container_id,cmd="bash service ssh start")
     response = cli.exec_start(executor.get('Id'))
     print container_name,"started successfully!"
 
@@ -207,7 +210,7 @@ def get_ssh_link(container_name):
     if container_already_present == 0:
         print "No instance",container_name,"exists!"
         return
-    print "root@"+container[0]['host_ip']+":"+str(container[0]['ssh_port'])
+    print "root@"+container[0]['host_ip']+" -p "+str(container[0]['ssh_port'])
 
 
 def get_git_clone_link(container_name):
@@ -268,7 +271,7 @@ def enter_container(container_name):
     status = container_status(container_name)
     if status == "No instance "+container_name+" exists!":
         return status
-    elif status == "Not running"
+    elif status == "Not running":
         return container_name + " not running. Start it first."
     else:
         cli = docker_client(container[0]['host_ip'])
@@ -319,11 +322,11 @@ def main():
                 print("Usage: start [instance_name]")
                 continue
             start_container(command.split(" ")[1])
-        elif command.split(" ")[0] == "enter":
-            if len(command.split(" "))<2:
-                print("Usage: enter [instance_name]")
-                continue
-            print enter_container(command.split(" ")[1])
+        # elif command.split(" ")[0] == "enter":
+        #     if len(command.split(" "))<2:
+        #         print("Usage: enter [instance_name]")
+        #         continue
+        #     print enter_container(command.split(" ")[1])
         elif command.split(" ")[0] == "stop":
             if len(command.split(" "))<2:
                 print("Usage: stop [instance_name]")

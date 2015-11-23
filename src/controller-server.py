@@ -12,6 +12,7 @@ import ConfigParser
 config = ConfigParser.ConfigParser()
 config.read('aztec.cfg')
 master_ip = config.get('Main_Config','master_ip_addr')
+aztecport = config.getint('Main_Config','master_controller_port')
 
 cli_master = Client(base_url=master_ip+":2375")    
 registry = master_ip+":5000"
@@ -53,6 +54,7 @@ def check_status():
 
 def node_exit_handler(addr):
     # Shift containers here
+    print "Failure handler called"
 
 def checkpoint():
     collection = db.containers
@@ -83,7 +85,7 @@ def clientthread(conn, addr):
 
 
 s = socket.socket()         # Create a socket object
-port = 12355                # Reserve a port for your service.
+port = aztecport                # Reserve a port for your service.
 s.bind((master_ip, port))        # Bind to the port
 
 client = MongoClient()
@@ -98,6 +100,8 @@ timeout_threshold = 20
 RepeatedTimer(10, check_status)
 RepeatedTimer(300, checkpoint)
 collection = db.online_nodes
+
+collection.insert({"ip":master_ip, "status":"online", "timestamp":time.time(), "high":0, "medium":0, "low":0})
 
 while True:
     conn, addr = s.accept()     # Establish connection with client.
