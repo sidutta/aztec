@@ -123,7 +123,7 @@ def checkpoint():
     for container in containers:
         cli = Client(base_url=container['host_ip']+":2375")
         status = cli.inspect_container(container['container_id'])['State']
-        if status['Running'] is True:
+        if status['Running'] is True and host_collection.find({"ip":container['host_ip']})[0]['status'] == "online":
             if container['checkpointed'] == "false":
                 collection.update_one({"container_id":container['container_id']},{"$set":{"checkpointed":"true"}})
             #cli.commit(container=container['container_id'],repository=registry+"/"+container['source_image'],tag=container['username']+"_"+container['container_name'])
