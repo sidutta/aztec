@@ -153,9 +153,9 @@ s.listen(5)                 # Now wait for client connection.
 
 timeout_threshold = 20
 
-RepeatedTimer(10, check_node_status)
-RepeatedTimer(30, check_container_status)
-RepeatedTimer(300, checkpoint)
+RepeatedTimer(5, check_node_status)
+RepeatedTimer(10, check_container_status)
+RepeatedTimer(15, checkpoint)
 collection = db.online_nodes
 
 collection.insert({"ip":master_ip, "status":"online", "timestamp":time.time(), "high":0, "medium":0, "low":0})
